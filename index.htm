@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YoutubeCube</title>
+
+<style>
+:root{
+  --eq-g: 46,255,5;
+  --eq-y: 255,234,0;
+  --eq-o: 255,120,0;
+  --eq-r: 255,0,72;
+
+  --ui: var(--eq-g);
+  --ui-hot: var(--eq-r);
+
+  --glow-1: 0.95;
+  --glow-2: 0.55;
+  --glow-3: 0.35;
+
+--border-1: 46,255,5;
+--border-2: 255,234,0;
+--border-3: 255,0,72;
+
+--cube-size: 340px;
+}
+
+html,body{
+  margin:0;
+  padding:0;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  font-family:monospace;
+}
+
+#bgImage{
+  position:fixed;
+  inset:0;
+  z-index:0;               
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  background-color:#000;
+  pointer-events:none;
+}
+
+#matrix{
+  position:fixed;
+  inset:0;
+  z-index:1;              
+  pointer-events:none;
+}
+
+#topUI{
+  position:fixed;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(980px, 95vw);
+  z-index:400;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:center;
+  pointer-events:auto;
+}
+
+#youtubeRow{
+  display:flex;
+  gap:8px;
+  width:100%;
+  justify-content:center;
+  align-items:center;
+}
+
+#videoInput{
+  width:min(520px, 70%);
+  padding:6px;
+  background:#000;
+  border:1px solid rgba(var(--ui),1);
+  color:rgba(var(--ui),1);
+}
+
+#loadVideo{}
+
+<div id="playWarning"></div>
+
+#playWarning{
+  position:fixed;
+  bottom:120px;
+  left:50%;
+  transform:translateX(-50%);
+  padding:8px 18px;
+  font-size:13px;
+  background:rgba(0,0,0,0.85);
+  border:1px solid rgba(var(--ui-hot),0.9);
+  color:rgba(var(--ui-hot),1);
+  text-shadow:0 0 8px rgba(var(--ui-hot),0.8);
+  box-shadow:0 0 16px rgba(var(--ui-hot),0.6);
+  border-radius:6px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .25s ease;
+  z-index:500;
+}
+
+#playWarning.show{
+  opacity:1;
+}
+
+.button.disabled{
+  opacity:0.4;
+  pointer-events:none;
+}
+
+#bottomUI{
+  position:fixed;
+  bottom:15px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(980px, 95vw);
+  z-index:400;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  align-items:center;
+  pointer-events:auto;
+}
+
+.scene{
+  position:fixed;
+  top:50%;
+  left:50%;
+  width:var(--cube-size);
+  height:var(--cube-size);
+  perspective:1200px;
+  perspective-origin:50% 50%;
+  transform:translate(-50%,-50%);
+  z-index:10;
+  touch-action:none;
+}
+
+.scene-inner{
+  width:100%;
+  height:100%;
+  transform-style:preserve-3d;
+  --beat:1s;
+  will-change: transform;
+  backface-visibility:hidden;
+  transform: translateZ(0);
+}
+
+.cube{
+  width:100%;
+  height:100%;
+  position:relative;
+  transform-style:preserve-3d;
+  transform-origin:50% 50%;
+  cursor:grab;
+}
+.cube.dragging{cursor:grabbing;}
+
+@keyframes borderPulseEQ{
+  0%{
+    box-shadow:
+      0 0 10px rgba(0,0,0,0.9),
+      0 0 20px rgba(0,0,0,0.6),
+      inset 0 0 12px rgba(0,0,0,0.5);
+  }
+  33%{
+    box-shadow:
+      0 0 18px rgba(var(--border-1),var(--glow-1)),
+      0 0 45px rgba(var(--border-1),var(--glow-2)),
+      inset 0 0 20px rgba(var(--border-1),var(--glow-3));
+  }
+  66%{
+    box-shadow:
+      0 0 24px rgba(var(--border-2),var(--glow-1)),
+      0 0 60px rgba(var(--border-2),var(--glow-2)),
+      inset 0 0 22px rgba(var(--border-2),var(--glow-3));
+  }
+  100%{
+    box-shadow:
+      0 0 26px rgba(var(--border-3),var(--glow-1)),
+      0 0 70px rgba(var(--border-3),var(--glow-2)),
+      inset 0 0 24px rgba(var(--border-3),var(--glow-3));
+  }
+}
+
+.face{
+  position:absolute;
+  width:var(--cube-size);
+  height:var(--cube-size);
+  overflow:hidden;
+  transform-style:preserve-3d;
+  backface-visibility:visible;
+  -webkit-backface-visibility:visible;
+  will-change: transform;
+  animation:borderPulseEQ 4.5s ease-in-out infinite;
+}
+
+.face::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0.35);
+  pointer-events:none;
+}
+
+.face iframe{
+  position:absolute;
+  width:100%;
+  height:100%;
+  border:0;
+  pointer-events:none;
+  backface-visibility:visible;
+  transform:translateZ(0);
+}
+
+.face,
+.face::after,
+.face iframe{
+  pointer-events: none !important;
+}
+
+.cube{
+  pointer-events: auto;
+  touch-action: none;
+  background: rgba(0,0,0,0.001); 
+}
+
+.front  { transform: rotateY(0deg)   translateZ(calc(var(--cube-size) / 2)); }
+.back   { transform: rotateY(180deg) translateZ(calc(var(--cube-size) / 2)); }
+.right  { transform: rotateY(90deg)  translateZ(calc(var(--cube-size) / 2)); }
+.left   { transform: rotateY(-90deg) translateZ(calc(var(--cube-size) / 2)); }
+.top    { transform: rotateX(90deg)  translateZ(calc(var(--cube-size) / 2)); }
+.bottom { transform: rotateX(-90deg) translateZ(calc(var(--cube-size) / 2)); }
+
+.core-content{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:
+    translate(-50%, -50%)
+    rotateX(90deg)
+    translateZ(0);
+
+  width:70%;
+  text-align:center;
+  font-size:22px;
+  font-weight:700;
+  letter-spacing:2px;
+  pointer-events:none;
+
+  color:#ffffff;
+
+  text-shadow:
+    0 0 12px rgba(var(--ui),0.9),
+    0 0 30px rgba(var(--ui-hot),0.6),
+    0 0 60px rgba(var(--ui-hot),0.3);
+
+  opacity:0;
+  transition:opacity 1.2s ease;
+}
+
+.core-content.visible{
+  opacity:1;
+}
+
+.button{
+  padding:8px 18px;
+  background:#000;
+  border:1px solid rgba(var(--ui),1);
+color:rgba(var(--ui),1);
+  cursor:pointer;
+  font-size:14px;
+  box-shadow:0 0 12px rgba(var(--ui),0.45);
+  transition:.2s;
+}
+.button:hover{
+  border-color:rgba(var(--eq-y),1) !important;
+  color:rgba(var(--eq-y),1) !important;
+  box-shadow:0 0 16px rgba(var(--eq-y),0.85) !important;
+}
+.button.active{
+  border-color:rgba(var(--ui-hot),1) !important;
+  color:rgba(var(--ui-hot),1) !important;
+  box-shadow:0 0 18px rgba(var(--ui-hot),1) !important;
+}
+
+#themeBar{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  justify-content:center;
+  width:100%;
+}
+
+#themeBar::-webkit-scrollbar{
+  display:none;
+}
+
+#speedControl{width:500px;max-width:90vw;}
+
+#bpmDisplay{
+  font-weight:700;
+  font-size:18px;
+  padding:4px 10px;
+  border-radius:6px;
+  color:#fff;
+  background:rgba(0,0,0,0.7);
+  box-shadow:0 0 10px rgba(var(--eq-y),0.55) !important;
+  text-shadow:0 0 6px rgba(var(--eq-y),0.75) !important;
+}
+
+#copyright{
+  position:fixed;
+  bottom:6px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:11px;
+  letter-spacing:1px;
+
+color:rgba(var(--ui-hot),0.95);
+text-shadow:
+  0 0 6px rgba(var(--ui-hot),0.9),
+  0 0 14px rgba(var(--ui-hot),0.6),
+  0 0 22px rgba(var(--ui-hot),0.35);
+
+  z-index:150;
+  pointer-events:none;
+}
+
+@media (max-width: 768px){
+
+  :root{
+    --cube-size: 180px;
+  }
+
+  #themeBar{ gap:6px; }
+  #themeBar .button{
+    font-size:11px;
+    padding:5px 10px;
+  }
+
+ #videoInput{
+    width:95%;
+    max-width:none;
+  }
+
+  #loadVideo{
+    width:auto;
+  }
+
+#controlBar{
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+
+  #youtubeRow{
+    flex-wrap:wrap; 
+  }
+
+  #speedWrapper{
+    flex-direction:column;
+    gap:8px;
+  }
+  #speedControl{
+    width:80vw;
+  }
+
+}
+
+#copyright{
+  bottom:2px;
+  font-size:10px;
+}
+
+}
+</style>
+</head>
+
+<body>
+  <div id="bgImage"></div>
+  <canvas id="matrix"></canvas>
+
+  <div id="topUI">
+    <div id="themeBar"></div>
+
+    <div id="youtubeRow">
+      <input id="videoInput" placeholder="Plak YouTube link of ID">
+      <button id="loadVideo" class="button">LOAD</button>
+    </div>
+  </div>
+
+  <div class="scene" id="scene">
+    <div class="scene-inner" id="sceneInner">
+      <div class="cube" id="cube">
+        <div class="face front"><iframe class="yt" loading="lazy"></iframe></div>
+        <div class="face back"><iframe class="yt" loading="lazy"></iframe></div>
+        <div class="face right"><iframe class="yt" loading="lazy"></iframe></div>
+        <div class="face left"><iframe class="yt" loading="lazy"></iframe></div>
+        <div class="face top"></div>
+        <div class="face bottom"></div>
+        <div class="core-content" id="coreText"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottomUI">
+    <div id="speedWrapper">
+      <div>SNELHEID</div>
+      <input type="range" id="speedControl" min="60" max="210" step="1" value="100">
+      <div id="bpmDisplay">100 BPM</div>
+    </div>
+
+    <div id="controlBar">
+<button id="pauseToggle" class="button">PAUSE</button>
+      <button id="eqToggle" class="button">EQ</button>
+      <button id="motionToggle" class="button">BOUNCE</button>
+      <button id="intensityToggle" class="button">SHAKE</button>
+    </div>
+  </div>
+
+  <div id="copyright">© 2026 S.V.</div>
+</body>
+
+<script>
+
+const canvas = document.getElementById("matrix");
+const ctx = canvas.getContext("2d");
+const playWarning = document.getElementById("playWarning");
+
+const slider = document.getElementById("speedControl");
+const bpmDisplay = document.getElementById("bpmDisplay");
+const sceneInner = document.getElementById("sceneInner");
+const cube = document.getElementById("cube");
+const themeBar = document.getElementById("themeBar");
+
+const eqBtn = document.getElementById("eqToggle");
+const motionBtn = document.getElementById("motionToggle");
+const intensityBtn = document.getElementById("intensityToggle");
+
+const DEFAULT_THEME = "techno";
+
+const coreText = document.getElementById("coreText");
+let videosLoaded = 0;
+
+const THEMES = {
+
+  dnb: {
+    label: "DNB",
+    bpmDefault: 174,
+    bpmMin: 170,
+    bpmMax: 178,
+    ui: "0,255,90",
+    uiHot: "255,255,0",
+    eqLow: [0,120,40],
+    eqMid: [0,255,90],
+    eqHigh: [255,255,0],
+    video: "Hjw86NcG8Bo",
+    background: "geralt-stars-2643089_1280.jpg"
+  },
+
+  techno: {
+    label: "TECHNO",
+    bpmDefault: 132,         
+    bpmMin: 125,
+    bpmMax: 135,
+    ui: "180,180,180",
+    uiHot: "255,0,72",
+    eqLow: [40,40,40],
+    eqMid: [180,180,180],
+    eqHigh: [255,0,72],
+    video: "bxYhJpILIQE",
+    background: "photo-1559657693-e816ff3bd9af.avif"
+  },
+
+  trance: {
+    label: "TRANCE",
+    bpmDefault: 138,          
+    bpmMin: 130,
+    bpmMax: 140,
+    ui: "0,255,210",
+    uiHot: "255,0,180",
+    eqLow: [0,80,255],
+    eqMid: [0,255,210],
+    eqHigh: [255,0,180],
+    video: "k32Cc4koohY",
+    background: "test.jpg"
+  },
+
+  hardstyle: {
+    label: "HARDSTYLE",
+    bpmDefault: 155,
+    bpmMin: 145,
+    bpmMax: 165,
+    ui: "0,200,255",
+    uiHot: "255,0,255",
+    eqLow: [0,120,255],
+    eqMid: [120,0,255],
+    eqHigh: [255,0,255],
+    video: "NhefG-huak0",
+    background: "photo-1464802686167-b939a6910659.avif"
+  },
+
+  hardcore: {
+    label: "HARDCORE",
+    bpmDefault: 180,
+    bpmMin: 165,
+    bpmMax: 200,
+    ui: "255,0,72",
+    uiHot: "255,255,255",
+    eqLow: [120,0,0],
+    eqMid: [255,0,0],
+    eqHigh: [255,255,255],
+    video: "Ws2X4WQqNL8",
+    background: "photo-1566345984367-fa2ba5cedc17.avif"
+  },
+
+  hardrock: {
+    label: "HARDROCK",
+    bpmDefault: 140,
+    bpmMin: 100,
+    bpmMax: 160,
+    ui: "255,80,0",
+    uiHot: "255,255,255",
+    eqLow: [80,0,0],
+    eqMid: [255,80,0],
+    eqHigh: [255,255,255],
+    video: "zSa7W28dftI",
+    background: "photo-1672678427113-5e13704f39f9.avif"
+  },
+
+metal: {
+  label: "METAL",
+  bpmDefault: 135,
+  bpmMin: 120,
+  bpmMax: 190,
+  ui: "200,0,0",       
+  uiHot: "255,255,255",  
+  eqLow: [25,25,25],  
+  eqMid: [160,0,0],       
+  eqHigh: [255,255,255], 
+  video: "5abamRO41fE",
+  background: "photo-1609800029525-b91fdea39774.avif"
+},
+
+hiphop: {
+  label: "HIPHOP",
+  bpmDefault: 92,
+  bpmMin: 80,
+  bpmMax: 105,
+  ui: "255,215,0",    
+  uiHot: "255,0,72",    
+  eqLow: [40,40,40],      
+  eqMid: [180,120,0],     
+  eqHigh: [255,215,0],      
+  video: "TbSm6HsX_ek",      
+  background: "photo-1689783101576-627f2fbdb8d5.avif"
+},
+
+nederhop: {
+  label: "NEDERHOP",
+  bpmDefault: 98,
+  bpmMin: 60,
+  bpmMax: 140,
+  ui: "255,120,0",          
+  uiHot: "0,200,255",     
+  eqLow: [50,30,10],
+  eqMid: [255,120,0],
+  eqHigh: [0,200,255],
+  video: "_GgM6Nz4jp8",     
+  background: "photo-1557436552-d1d884f1bb62.avif"
+},
+
+rnb: {
+  label: "R&B",
+  bpmDefault: 85,
+  bpmMin: 65,
+  bpmMax: 110,
+  ui: "160,60,200",         
+  uiHot: "255,120,200",    
+  eqLow:  [40,20,70],      
+  eqMid:  [160,60,200],     
+  eqHigh: [255,120,200],    
+  video: "kQ1A85aIzFU",    
+  background: "denis-feofilaktov-Y4VlbwhaEsE-unsplash.jpg"
+},
+
+  synthwave: {
+    label: "SYNTHWAVE",
+    bpmDefault: 125,        
+    bpmMin: 110,
+    bpmMax: 130,
+    ui: "255,0,255",
+    uiHot: "0,200,255",
+    eqLow: [120,0,255],
+    eqMid: [255,0,255],
+    eqHigh: [0,200,255],
+    video: "QqjVD-qPZ3M",
+    background: "photo-1419242902214-272b3f66ee7a.avif"
+  },
+
+  reggae: {
+    label: "REGGAE",
+    bpmDefault: 74,        
+    bpmMin: 70,
+    bpmMax: 148,
+    ui: "46,255,5",
+    uiHot: "255,0,72",
+eqLow:  [0, 122, 51],  
+eqMid:  [255, 204, 0],
+eqHigh: [206, 17, 38], 
+    video: "LanCLS_hIo4",
+    background: "photo-1444703686981-a3abbc4d4fe3.avif"
+  },
+
+};
+
+let isPaused = true;
+let firstLoad = true;
+
+let currentTheme = DEFAULT_THEME;
+
+const EQ_BASELINE = 0.16;         
+let eqAccumulator = 0;            
+function getEQTickRate(){
+  const beatsPerSecond = currentBPM / 60;
+  const ticksPerBeat = 16;   
+  return beatsPerSecond * ticksPerBeat;
+}
+const EQ_AMPLITUDE = 0.85;        
+
+let visualizerActive = false;
+let motionActive = false;
+let intensityActive = false;
+
+let currentBPM = parseInt(slider.value, 10) || 100;
+
+function applyBPM(bpm){
+  currentBPM = bpm;
+  sceneInner.style.setProperty("--beat", (60 / bpm) + "s");
+  bpmDisplay.textContent = bpm + " BPM";
+}
+slider.addEventListener("input", () => applyBPM(parseInt(slider.value, 10) || 100));
+
+let bars = [];
+let barCount = 0;
+let lastTime = 0;
+
+let rotX = -20, rotY = 30, velX = 0, velY = 0;
+let drag = false, lastX = 0, lastY = 0;
+let beatOffsetY = 0, beatOffsetX = 0;
+
+const scene = document.getElementById("scene");
+
+let zoom = 0.72;
+let targetZoom = 0.72;
+
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+
+function showPlayWarning(){
+  playWarning.textContent = "Druk eerst op PLAY";
+  playWarning.classList.add("show");
+
+  setTimeout(() => {
+    playWarning.classList.remove("show");
+  }, 1500);
+}
+
+function syncToggleButtons(){
+  eqBtn.classList.toggle("active", visualizerActive);
+  motionBtn.classList.toggle("active", motionActive);
+  intensityBtn.classList.toggle("active", intensityActive);
+}
+
+function resetMotionState(){
+  motionActive = false;
+  intensityActive = false;
+  beatOffsetY = 0;
+  beatOffsetX = 0;
+}
+
+function resetThemeTogglesKeepAudio(){
+  visualizerActive = false;
+  resetMotionState();
+  syncToggleButtons();
+}
+
+function kickEQ(){
+  for (const b of bars){
+    b.value = Math.max(0.05, Math.min(1, b.value + (Math.random()*0.30 - 0.12)));
+  }
+}
+
+function buildThemeButtons(){
+  themeBar.innerHTML = "";
+  Object.keys(THEMES).forEach(key => {
+    const b = document.createElement("button");
+    b.className = "button";
+    b.dataset.theme = key;
+    b.textContent = THEMES[key].label || key.toUpperCase();
+    b.onclick = () => applyTheme(key);
+    themeBar.appendChild(b);
+  });
+}
+
+function hardClearCanvas(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const ratio = window.devicePixelRatio || 1;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+}
+
+function resetEQBars(mode = "baseline"){
+  for (let i = 0; i < bars.length; i++){
+    const b = bars[i];
+    if (mode === "baseline"){
+      b.value = EQ_BASELINE;
+      b.target = EQ_BASELINE;
+    } else if (mode === "flat"){
+      const v = 0.12 + Math.random() * 0.05;
+      b.value = v;
+      b.target = v;
+    } else { 
+      b.value = Math.random() * 0.65 + 0.10;
+      b.target = Math.random();
+    }
+  }
+  lastTime = 0;
+  eqAccumulator = 0;
+}
+
+function setBackground(src){
+  const bg = document.getElementById("bgImage");
+  bg.style.backgroundImage = `url('${src}')`;
+}
+
+function applyTheme(name){
+  const theme = THEMES[name];
+  if (!theme) return;
+
+resetThemeTogglesKeepAudio();
+
+  currentTheme = name;
+
+document.documentElement.style.setProperty("--ui", theme.ui);
+document.documentElement.style.setProperty("--ui-hot", theme.uiHot);
+
+document.documentElement.style.setProperty("--border-1", theme.eqLow.join(","));
+document.documentElement.style.setProperty("--border-2", theme.eqMid.join(","));
+document.documentElement.style.setProperty("--border-3", theme.eqHigh.join(","));
+
+  slider.min = theme.bpmMin;
+  slider.max = theme.bpmMax;
+  slider.value = theme.bpmDefault;
+  applyBPM(theme.bpmDefault);
+
+  if (theme.video) setVideo(theme.video);
+
+isPaused = true;
+syncPauseButton();
+
+if (theme.background){
+  setBackground(theme.background);
+}
+
+  resetEQBars("baseline");
+  hardClearCanvas();
+
+  document.querySelectorAll("#themeBar .button").forEach(btn => btn.classList.remove("active"));
+  const btn = document.querySelector(`#themeBar .button[data-theme="${name}"]`);
+  if (btn) btn.classList.add("active");
+}
+
+function resize(){
+  const ratio = window.devicePixelRatio || 1;
+
+  canvas.width = window.innerWidth * ratio;
+  canvas.height = window.innerHeight * ratio;
+
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+  barCount = Math.max(12, Math.floor(window.innerWidth / 22));
+
+  bars = Array.from({length: barCount}, () => ({
+    value: EQ_BASELINE,
+    target: EQ_BASELINE
+  }));
+
+  resetEQBars("baseline");
+  hardClearCanvas();
+}
+window.addEventListener("resize", resize);
+resize();
+
+
+function renderBackground(ts){
+  if (!lastTime) lastTime = ts;
+  let delta = (ts - lastTime) / 1000;
+  lastTime = ts;
+  if (delta > 0.05) delta = 0.016;
+
+const width = canvas.width / (window.devicePixelRatio || 1);
+const height = canvas.height / (window.devicePixelRatio || 1);
+  const barWidth = width / barCount;
+
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+if (visualizerActive){
+
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+  let pulse = 0.5;
+  if (visualizerActive){
+    const beatDuration = 60000 / currentBPM;
+    const beatProgress = (ts % beatDuration) / beatDuration;
+
+    if (currentTheme === "hardcore") pulse = Math.pow(Math.abs(Math.sin(beatProgress * Math.PI)), 4);
+    else if (currentTheme === "hardstyle") pulse = Math.pow(Math.abs(Math.sin(beatProgress * Math.PI)), 2);
+    else pulse = 0.6 + Math.abs(Math.sin(beatProgress * Math.PI * 2)) * 0.4;
+  }
+
+  if (visualizerActive){
+    eqAccumulator += delta;
+const tick = 1 / getEQTickRate();
+
+    while (eqAccumulator >= tick){
+      eqAccumulator -= tick;
+
+      const beatBoost = 0.65 + pulse * 0.35;
+
+      for (let j = 0; j < barCount; j++){
+        const bj = bars[j];
+
+        const r = Math.random();
+        const shaped = r * r;
+
+        const spike = (Math.random() < 0.03) ? (0.25 + Math.random() * 0.55) : 0;
+
+        let t = EQ_BASELINE + shaped * EQ_AMPLITUDE * beatBoost + spike;
+        if (t > 1) t = 1;
+        if (t < 0) t = 0;
+
+        bj.target = t;
+      }
+
+      for (let j = 1; j < barCount - 1; j++){
+        bars[j].target =
+          bars[j].target * 0.60 +
+          bars[j - 1].target * 0.20 +
+          bars[j + 1].target * 0.20;
+      }
+    }
+  }
+
+  const theme = THEMES[currentTheme] || THEMES[DEFAULT_THEME];
+
+  for (let i = 0; i < barCount; i++){
+    const b = bars[i];
+
+    if (visualizerActive){
+      const k = (b.target > b.value) ? 14.0 : 7.0; 
+      b.value += (b.target - b.value) * k * delta;
+
+      b.value += (EQ_BASELINE - b.value) * 1.1 * delta;
+
+      if (b.value < 0) b.value = 0;
+      if (b.value > 1) b.value = 1;
+    } else {
+      b.value = EQ_BASELINE;
+      b.target = EQ_BASELINE;
+    }
+
+    const barHeight = height * b.value * (0.7 + pulse * 0.3);
+    const x = i * barWidth;
+    const y = height - barHeight;
+
+const level = Math.max(0, Math.min(1, b.value));
+let r, g, bl;
+
+if (currentTheme === "reggae") {
+
+  const gradient = ctx.createLinearGradient(0, y, 0, height);
+
+gradient.addColorStop(0,   "rgba(206,17,38,0.95)"); 
+gradient.addColorStop(0.5, "rgba(255,204,0,0.95)");   
+gradient.addColorStop(1,   "rgba(0,119,73,0.95)"); 
+
+  ctx.fillStyle = gradient;
+
+} else {
+
+  const level = Math.max(0, Math.min(1, b.value));
+
+  let r, g, bl;
+
+  if (level < 0.5){
+    const t = level / 0.5;
+    r  = theme.eqLow[0] + (theme.eqMid[0] - theme.eqLow[0]) * t;
+    g  = theme.eqLow[1] + (theme.eqMid[1] - theme.eqLow[1]) * t;
+    bl = theme.eqLow[2] + (theme.eqMid[2] - theme.eqLow[2]) * t;
+  } else {
+    const t = (level - 0.5) / 0.5;
+    r  = theme.eqMid[0] + (theme.eqHigh[0] - theme.eqMid[0]) * t;
+    g  = theme.eqMid[1] + (theme.eqHigh[1] - theme.eqMid[1]) * t;
+    bl = theme.eqMid[2] + (theme.eqHigh[2] - theme.eqMid[2]) * t;
+  }
+
+  ctx.fillStyle = `rgba(${r},${g},${bl},0.92)`;
+}
+
+ctx.fillRect(x, y, barWidth * 0.85, barHeight);
+}
+
+requestAnimationFrame(renderBackground);
+}
+
+requestAnimationFrame(renderBackground);
+
+document.addEventListener("wheel", e => {
+  e.preventDefault();
+
+  const zoomIntensity = 0.0015;
+
+  targetZoom -= e.deltaY * zoomIntensity;
+  targetZoom = Math.max(0.3, Math.min(3.2, targetZoom));
+
+}, { passive:false });
+
+const pointers = new Map();
+
+scene.addEventListener("pointerdown", e => {
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  cube.setPointerCapture(e.pointerId);
+
+  if (pointers.size === 1){
+    drag = true;
+    cube.classList.add("dragging");
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }
+
+  if (pointers.size === 2){
+    const pts = [...pointers.values()];
+    pinchStartDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    pinchStartZoom = targetZoom;
+  }
+});
+
+window.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+  if (pointers.size === 2){
+    const pts = [...pointers.values()];
+    const dist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    if (pinchStartDist > 0){
+      targetZoom = Math.max(0.3, Math.min(3.2, pinchStartZoom * (dist/pinchStartDist)));
+    }
+    return;
+  }
+
+  if (!drag) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  rotY += dx * 0.35;
+  rotX -= dy * 0.35;
+  velY = dx * 0.15;
+  velX = -dy * 0.15;
+  lastX = e.clientX;
+  lastY = e.clientY;
+});
+
+window.addEventListener("pointerup", e => endPointer(e));
+window.addEventListener("pointercancel", e => endPointer(e));
+
+let smoothY = 0;
+let smoothX = 0;
+
+function endPointer(e){
+  if (!pointers.has(e.pointerId)) return;
+
+  cube.releasePointerCapture(e.pointerId);
+  pointers.delete(e.pointerId);
+
+  if (pointers.size === 0){
+    drag = false;
+    cube.classList.remove("dragging");
+  }
+
+  if (pointers.size < 2){
+    pinchStartDist = 0;
+  }
+}
+
+function animateZoom(){
+  zoom += (targetZoom - zoom) * 0.12;
+
+  scene.style.transform =
+    `translate(-50%,-50%) scale(${zoom})`;
+
+  requestAnimationFrame(animateZoom);
+}
+animateZoom();
+
+function animateCube(ts){
+if (!drag && !isPaused){
+
+  rotX += velX;
+  rotY += velY;
+  velX *= 0.96;
+  velY *= 0.96;
+
+  rotY += 0.25;   
+}
+zoom += (targetZoom - zoom) * 0.15;
+  if (!isPaused && (motionActive || intensityActive)){
+    const beatDuration = 60000 / currentBPM;
+    const beatProgress = (ts % beatDuration) / beatDuration;
+
+let raw = Math.sin(beatProgress * Math.PI * 2);
+
+let pulse = raw * 0.85;
+
+if (currentTheme === "hardcore") pulse *= 1.6;
+if (currentTheme === "hardstyle") pulse *= 1.15;
+if (currentTheme === "hiphop" || currentTheme === "nederhop") pulse *= 0.8;
+
+let baseY = (currentTheme === "hardcore") ? 40 : 26;
+let baseX = 14;
+
+let targetY = pulse * baseY;
+let targetX = intensityActive ? pulse * baseX : 0;
+
+smoothY += (targetY - smoothY) * 0.13;
+smoothX += (targetX - smoothX) * 0.13;
+
+beatOffsetY = smoothY;
+beatOffsetX = smoothX;
+  } else {
+    beatOffsetY *= 0.9;
+    beatOffsetX *= 0.9;
+  }
+
+sceneInner.style.transform =
+  `translateY(${-beatOffsetY}px)
+   translateX(${beatOffsetX}px)`;
+
+// 2️⃣ Rotatie + scale alleen op cube
+cube.style.transform =
+  `rotateX(${rotX}deg)
+   rotateY(${rotY}deg)`;
+
+  requestAnimationFrame(animateCube);
+}
+requestAnimationFrame(animateCube);
+
+let currentVideo = "xnFbl_6j7_o";
+let muted = false;
+
+function extractVideoID(input){
+  if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+  const match = input.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
+
+function setVideo(id){
+videosLoaded = 0;
+coreText.classList.remove("visible");
+  currentVideo = id;
+  const iframes = document.querySelectorAll(".yt");
+
+  iframes.forEach((frame, index) => {
+
+    frame.src = "";
+
+frame.onload = () => {
+
+  videosLoaded++;
+
+  if (videosLoaded === document.querySelectorAll(".yt").length){
+    showCoreMessage();
+  }
+
+  setTimeout(() => {
+    const isMaster = index === 0;
+
+    frame.contentWindow.postMessage(JSON.stringify({
+      event: "command",
+      func: isMaster && !muted ? "unMute" : "mute",
+      args: []
+    }), "*");
+
+    frame.contentWindow.postMessage(JSON.stringify({
+      event: "command",
+      func: isPaused ? "pauseVideo" : "playVideo",
+      args: []
+    }), "*");
+
+    if (isMaster && !muted){
+      frame.contentWindow.postMessage(JSON.stringify({
+        event:"command",
+        func:"setVolume",
+        args:[100]
+      }), "*");
+    }
+
+  }, 300);
+};
+
+    frame.src =
+      "https://www.youtube.com/embed/" + id +
+      "?autoplay=0" +
+      "&mute=0" +
+      "&controls=0" +
+      "&loop=1" +
+      "&playlist=" + id +
+      "&playsinline=1" +
+      "&enablejsapi=1" +
+      "&origin=" + window.location.origin +
+      "&rel=0";
+  });
+}
+
+document.getElementById("loadVideo").onclick = () => {
+  const input = document.getElementById("videoInput").value.trim();
+  const id = extractVideoID(input);
+  if (id) setVideo(id);
+};
+
+const pauseBtn = document.getElementById("pauseToggle");
+
+function syncPauseButton(){
+  pauseBtn.classList.toggle("active", !isPaused);
+  pauseBtn.textContent = isPaused ? "PLAY" : "PAUSE";
+
+    motionBtn.classList.toggle("disabled", isPaused);
+    intensityBtn.classList.toggle("disabled", isPaused);
+    eqBtn.classList.toggle("disabled", isPaused);
+}
+
+pauseBtn.onclick = () => {
+
+  isPaused = !isPaused;
+
+  const frames = document.querySelectorAll(".yt");
+
+  frames.forEach((frame, index) => {
+    const isMaster = index === 0;
+
+    frame.contentWindow.postMessage(JSON.stringify({
+      event: "command",
+      func: isPaused ? "pauseVideo" : "playVideo",
+      args: []
+    }), "*");
+
+    frame.contentWindow.postMessage(JSON.stringify({
+      event: "command",
+      func: (!isPaused && isMaster) ? "unMute" : "mute",
+      args: []
+    }), "*");
+
+    if (!isPaused && isMaster) {
+      frame.contentWindow.postMessage(JSON.stringify({
+        event: "command",
+        func: "setVolume",
+        args: [100]
+      }), "*");
+    }
+  });
+
+  if (isPaused){
+
+    visualizerActive = false;
+    motionActive = false;
+    intensityActive = false;
+
+    resetEQBars("baseline");
+    hardClearCanvas();
+
+    beatOffsetX = 0;
+    beatOffsetY = 0;
+
+    syncToggleButtons();
+  }
+
+  syncPauseButton();
+};
+
+eqBtn.onclick = () => {
+
+  if (isPaused){
+    showPlayWarning();
+    return;
+  }
+
+  visualizerActive = !visualizerActive;
+
+  if (visualizerActive){
+    resetEQBars("baseline");
+    eqAccumulator = 999;
+    kickEQ();
+  } else {
+    resetEQBars("baseline");
+    hardClearCanvas();
+  }
+
+  syncToggleButtons();
+};
+
+motionBtn.onclick = () => {
+
+  if (isPaused){
+    showPlayWarning();
+    return;
+  }
+
+  motionActive = !motionActive;
+  if (!motionActive) beatOffsetY = 0;
+  syncToggleButtons();
+};
+
+intensityBtn.onclick = () => {
+
+  if (isPaused){
+    showPlayWarning();
+    return;
+  }
+
+  intensityActive = !intensityActive;
+  if (!intensityActive) beatOffsetX = 0;
+  syncToggleButtons();
+};
+
+function showCoreMessage(){
+
+  coreText.innerHTML = `
+    TEXT
+  `;
+
+  setTimeout(()=>{
+    coreText.classList.add("visible");
+  }, 600);
+}
+
+buildThemeButtons();
+
+isPaused = true;
+firstLoad = true;
+syncPauseButton();
+motionBtn.classList.toggle("disabled", isPaused);
+intensityBtn.classList.toggle("disabled", isPaused);
+
+applyTheme(DEFAULT_THEME);  
+firstLoad = false;
+
+syncToggleButtons();
+
+</script>
+</body>
+</html>
